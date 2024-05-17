@@ -9,8 +9,13 @@ from typing import List
 from attr import define
 from livekit import agents, rtc
 from livekit.agents.llm import ChatContext, ChatMessage, ChatRole
-from livekit.plugins.elevenlabs import TTS
-from livekit.plugins.openai import LLM
+import os
+import sys
+sys.path.append(os.getcwd())
+# from livekit.plugins.elevenlabs import TTS
+from tts import TTS  # local
+# from livekit.plugins.openai import LLM
+from openai_plugins.llm import LLM  # local
 
 
 class InferenceJob:
@@ -26,7 +31,8 @@ class InferenceJob:
         self._transcription = transcription
         self._current_response = ""
         self._chat_history = chat_history
-        self._tts = TTS(model_id="eleven_turbo_v2")
+        # self._tts = TTS(model_id="eleven_turbo_v2")
+        self._tts = TTS(api_key="azure")
         self._tts_stream = self._tts.stream()
         self._llm = LLM()
         self._run_task = asyncio.create_task(self._run())
@@ -129,7 +135,7 @@ class InferenceJob:
             self._tts_stream.push_text(self._force_text_response)
             self.current_response = self._force_text_response
             self.finished_generating = True
-            await self._tts_stream.flush()
+            # await self._tts_stream.flush()
             return
 
         chat_context = ChatContext(
@@ -143,7 +149,7 @@ class InferenceJob:
             self._tts_stream.push_text(delta)
             self.current_response += delta
         self.finished_generating = True
-        await self._tts_stream.flush()
+        # await self._tts_stream.flush()
 
     async def _tts_task(self):
         async for event in self._tts_stream:

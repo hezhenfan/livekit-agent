@@ -9,8 +9,15 @@ from livekit.agents import (
     WorkerOptions,
     cli,
 )
+import os
+import sys
+sys.path.append(os.getcwd())
 from livekit.plugins.deepgram import STT
+# from openai_plugins.stt import STT  # local
 from state_manager import StateManager
+
+from dotenv import load_dotenv
+load_dotenv()
 
 PROMPT = "You are KITT, a friendly voice assistant powered by LiveKit.  \
           Conversation should be personable, and be sure to ask follow up questions. \
@@ -31,7 +38,7 @@ async def entrypoint(job: JobContext):
     options.source = rtc.TrackSource.SOURCE_MICROPHONE
 
     # Plugins
-    stt = STT()
+    stt = STT(language='zh')
     stt_stream = stt.stream()
 
     # Agent state
