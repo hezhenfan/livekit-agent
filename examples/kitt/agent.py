@@ -1,5 +1,6 @@
 import asyncio
 import json
+import logging
 
 from inference_job import EventType, InferenceJob
 from livekit import agents, rtc
@@ -19,6 +20,9 @@ from state_manager import StateManager
 from dotenv import load_dotenv
 load_dotenv()
 
+logger = logging.getLogger("kitt plus.agent")
+logging.basicConfig(encoding='utf-8')
+
 PROMPT = "You are KITT, a friendly voice assistant powered by LiveKit.  \
           Conversation should be personable, and be sure to ask follow up questions. \
           If your response is a question, please append a question mark symbol to the end of it.\
@@ -32,10 +36,13 @@ SIP_INTRO = "Hello, I am KITT, a friendly voice assistant powered by LiveKit Age
 
 async def entrypoint(job: JobContext):
     # LiveKit Entities
-    source = rtc.AudioSource(24000, 1)
-    track = rtc.LocalAudioTrack.create_audio_track("agent-mic", source)
+    audio_source = rtc.AudioSource(24000, 1)
+    audio_track = rtc.LocalAudioTrack.create_audio_track("agent-mic", audio_source)
     options = rtc.TrackPublishOptions()
     options.source = rtc.TrackSource.SOURCE_MICROPHONE
+
+    # video_source = rtc.VideoSource(640, 480)
+    # video_track = rtc.LocalVideoTrack.create_video_track("agent-camera", video_source)
 
     # Plugins
     stt = STT(language='zh')
@@ -47,10 +54,13 @@ async def entrypoint(job: JobContext):
     current_transcription = ""
 
     audio_stream_future = asyncio.Future[rtc.AudioStream]()
+    # video_stream_future = asyncio.Future[rtc.VideoStream]()
 
-    def on_track_subscribed(track: rtc.Track, *_):
-        if track.kind == rtc.TrackKind.KIND_AUDIO:
-            audio_stream_future.set_result(rtc.AudioStream(track))
+    def on_track_subscribed(audio_track: rtc.Track, video_track: rtc.Track, *_):
+        if audio_track.kind == rtc.TrackKind.KIND_AUDIO:
+            audio_stream_future.set_result(rtc.AudioStream(audio_track))
+        # if video_track.kind == rtc.TrackKind.KIND_VIDEO:
+        #     video_stream_future.set_result(rtc.VideoStream(video_track))
 
     def on_data(dp: rtc.DataPacket):
         nonlocal current_transcription
@@ -67,7 +77,7 @@ async def entrypoint(job: JobContext):
 
     for participant in job.room.participants.values():
         for track_pub in participant.tracks.values():
-            # This track is not yet subscribed, when it is subscribed it will
+            # This audio_track is not yet subscribed, when it is subscribed it will
             # call the on_track_subscribed callback
             if track_pub.track is None:
                 continue
@@ -78,9 +88,13 @@ async def entrypoint(job: JobContext):
 
     # Wait for user audio
     audio_stream = await audio_stream_future
+    logger.warning(type(audio_stream))
+    logger.warning(f'audio_stream: {audio_stream}')
+    # video_stream = await video_stream_future
 
     # Publish agent mic after waiting for user audio (simple way to avoid subscribing to self)
-    await job.room.local_participant.publish_track(track, options)
+    await job.room.local_participant.publish_track(audio_track, options)
+    # await job.room.local_participant.publish_track(video_track, options)
 
     async def start_new_inference(force_text: str | None = None):
         nonlocal current_transcription
@@ -88,7 +102,7 @@ async def entrypoint(job: JobContext):
         state.agent_thinking = True
         job = InferenceJob(
             transcription=current_transcription,
-            audio_source=source,
+            audio_source=audio_source,
             chat_history=state.chat_history,
             force_text_response=force_text,
         )
@@ -127,6 +141,10 @@ async def entrypoint(job: JobContext):
         async for audio_frame_event in audio_stream:
             stt_stream.push_frame(audio_frame_event.frame)
 
+    # async def video_stream_task():
+    #     async for video_frame_event in video_stream:
+    #         stt_stream.push_frame(video_frame_event.frame)
+
     async def stt_stream_task():
         nonlocal current_transcription, inference_task
         async for stt_event in stt_stream:
@@ -152,6 +170,7 @@ async def entrypoint(job: JobContext):
         inference_task = asyncio.create_task(start_new_inference(force_text=intro_text))
         async with asyncio.TaskGroup() as tg:
             tg.create_task(audio_stream_task())
+            # tg.create_task(video_stream_task())
             tg.create_task(stt_stream_task())
     except BaseExceptionGroup as e:
         for exc in e.exceptions:
@@ -161,7 +180,7 @@ async def entrypoint(job: JobContext):
 
 
 async def request_fnc(req: JobRequest) -> None:
-    await req.accept(entrypoint, auto_subscribe=agents.AutoSubscribe.AUDIO_ONLY)
+    await req.accept(entrypoint, auto_subscribe=agents.AutoSubscribe.SUBSCRIBE_ALL)
 
 
 if __name__ == "__main__":

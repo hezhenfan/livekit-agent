@@ -29,6 +29,10 @@ from typing import Literal
 
 from azure_tts import gen_audio
 
+import logging
+
+logger = logging.getLogger("kitt plus.kitt.tts")
+
 TTSModels = Literal[
     "eleven_monolingual_v1",
     "eleven_multilingual_v1",
@@ -64,6 +68,7 @@ DEFAULT_VOICE = Voice(
 
 API_BASE_URL_V1 = "https://api.elevenlabs.io/v1"
 AUTHORIZATION_HEADER = "xi-api-key"
+STREAM_EOS = ""
 
 
 @dataclass
@@ -122,6 +127,7 @@ class TTS(tts.TTS):
         async def generator():
             try:
                 audio_path = gen_audio(text)
+                logger.warning(f"audio_path: {audio_path}")
                 with open(audio_path, "rb") as f:
                     data = f.read()
                 yield tts.SynthesizedAudio(
@@ -204,6 +210,12 @@ class SynthesizeStream(tts.SynthesizeStream):
             seg = seg.strip() + " "  # 11labs expects a space at the end
             self._queue.put_nowait(seg)
             self._text = self._text[last_split + 1 :]
+
+    # async def flush(self) -> None:
+    #     self._queue.put_nowait(self._text + " ")
+    #     self._text = ""
+    #     self._queue.put_nowait(STREAM_EOS)
+    #     await self._queue.join()
 
     async def aclose(self, *, wait: bool = True) -> None:
         self._flush_if_needed()

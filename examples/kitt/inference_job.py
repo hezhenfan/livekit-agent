@@ -16,6 +16,10 @@ sys.path.append(os.getcwd())
 from tts import TTS  # local
 # from livekit.plugins.openai import LLM
 from openai_plugins.llm import LLM  # local
+import logging
+
+logger = logging.getLogger("kitt plus.inference-job")
+logging.basicConfig(encoding='utf-8')
 
 
 class InferenceJob:
@@ -148,11 +152,12 @@ class InferenceJob:
                 break
             self._tts_stream.push_text(delta)
             self.current_response += delta
+        logger.warning("current_response: %s", self.current_response)
         self.finished_generating = True
         # await self._tts_stream.flush()
 
     async def _tts_task(self):
-        async for event in self._tts_stream:
+        async for event in self._tts_streamself._tts_stream:
             if event.type == agents.tts.SynthesisEventType.AUDIO:
                 await self._output_queue.put(
                     event.audio.data if event.audio else event.audio

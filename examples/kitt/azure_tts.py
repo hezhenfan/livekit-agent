@@ -5,6 +5,10 @@ import uuid
 import azure.cognitiveservices.speech as speechsdk
 from azure.cognitiveservices.speech import SpeechSynthesisOutputFormat
 
+import logging
+
+logger = logging.getLogger("kitt plus.azure.tts")
+
 speech_key, service_region = "e5a8143f92bc4da3a69fdeb1ddfe70dc", "eastus"
 
 
@@ -33,6 +37,7 @@ def gen_audio(text: str):
             print("Error details: {}".format(cancellation_details.error_details))
 
     audio_path = os.path.join(os.getcwd(), 'audio_tmp', uuid.uuid4().hex + '.wav')
+    logger.warning(f"audio_path azure里: {audio_path}")
     stream = speechsdk.AudioDataStream(result)
     stream.save_to_wav_file(audio_path)
     return audio_path
